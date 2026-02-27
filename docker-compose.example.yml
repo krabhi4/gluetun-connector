@@ -9,9 +9,10 @@ services:
     environment:
       # --- Web UI Options ---
       - GLUETUN_CONTROL_URL=http://gluetun:8000
-      #- GLUETUN_API_KEY=yourtoken
+      - GLUETUN_API_KEY=gluetun_secret
       #- GLUETUN_USER=username
       #- GLUETUN_PASSWORD=password
+
 
       # --- Monitor Options ---
       - GLUETUN_CONTAINER=gluetun

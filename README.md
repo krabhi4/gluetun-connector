@@ -94,6 +94,21 @@ docker compose up -d --build
 
 ---
 
+## Gluetun Authentication (Required)
+
+Recent versions of Gluetun (v3.39.1+) require authentication for the control server by default.
+To use this connector, you must configure an API key on your **Gluetun** container by adding this environment variable:
+
+```yaml
+gluetun:
+  environment:
+    - 'HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE={"auth":"apikey","apikey":"your_secret_key"}'
+```
+
+Then pass that same key to the connector using `GLUETUN_API_KEY=your_secret_key`.
+
+---
+
 ## Network Setup
 
 Both Gluetun and gluetun-connector must be on the same Docker network so `http://gluetun:8000` resolves correctly.
