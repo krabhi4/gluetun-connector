@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+yarn.lock
+
+# Logs
+npm-debug.log*
+*.log
+
+# Environment
+.env
+.env.*
+.npmrc
+
+# Version control
+.git
+.gitignore
+.github
+
+# Documentation & configuration
+*.md
+FINDINGS.md
+SECURITY.md
+docker-compose*.yml
+Dockerfile.dev
+.editorconfig
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+.env.local

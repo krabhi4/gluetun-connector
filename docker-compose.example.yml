@@ -1,0 +1,49 @@
+name: gluetun-connector
+
+services:
+  gluetun-connector:
+    build: .
+    container_name: gluetun-connector
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      # --- Web UI Options ---
+      - GLUETUN_CONTROL_URL=http://gluetun:8000
+      #- GLUETUN_API_KEY=yourtoken
+      #- GLUETUN_USER=username
+      #- GLUETUN_PASSWORD=password
+
+      # --- Monitor Options ---
+      - GLUETUN_CONTAINER=gluetun
+      - CHECK_INTERVAL=30
+      - TIMEOUT=10
+      - FAIL_THRESHOLD=2
+      - DEPENDENT_CONTAINERS=auto
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./sites.conf:/config/sites.conf:ro
+    
+    networks:
+      - ext-network
+    
+    restart: unless-stopped
+    # Depending on setup, read_only might interfere with Docker API or npm modules, leaving default
+    
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  ext-network:
+    external: true
+    name: your_network_name  # ← Change this to match your existing Docker network
