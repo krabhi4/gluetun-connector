@@ -1,15 +1,5 @@
-# Dependencies
-node_modules
-yarn.lock
-
-# Logs
-npm-debug.log*
-*.log
-
-# Environment
-.env
-.env.*
-.npmrc
+# Rust build artifacts
+target/
 
 # Version control
 .git
@@ -24,13 +14,22 @@ docker-compose*.yml
 Dockerfile.dev
 .editorconfig
 
-# IDE
+# IDE / OS
 .vscode
 .idea
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
-.env.local
+
+# Environment
+.env
+.env.*
+.npmrc
+
+# Old JS artefacts (kept in repo for history, not needed in image)
+node_modules/
+package.json
+pnpm-lock.yaml
+src/server.js
+src/monitor.js

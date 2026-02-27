@@ -30,3 +30,8 @@ build/
 .DS_Store
 Thumbs.db
 .env.local
+
+
+# Rust
+/target
+Cargo.lock.bak

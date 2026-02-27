@@ -3,7 +3,8 @@
 A lightweight web UI and Monitor wrapper for controlling [Gluetun](https://github.com/qdm12/gluetun) — the VPN client container for Docker.
 
 ![Status: Connected](https://img.shields.io/badge/status-connected-brightgreen)
-![Node 25](https://img.shields.io/badge/node-25--alpine-blue)
+![Rust](https://img.shields.io/badge/rust-1.85%2B-orange)
+![Image size](https://img.shields.io/badge/image-~4MB%20scratch-blue)
 ![Docker](https://img.shields.io/badge/docker-compose-blue)
 
 ---
@@ -68,7 +69,7 @@ gluetun-connector:
     - your_network_name
   restart: unless-stopped
   healthcheck:
-    test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+    test: ["CMD", "/usr/local/bin/gluetun-connector", "--health-check"]
     interval: 30s
     timeout: 5s
     start_period: 10s
@@ -82,8 +83,6 @@ docker compose up -d
 ```
 
 The UI is available at **http://localhost:3000**
-
-### Option B: Build Locally
 
 ### Option B: Build Locally
 
@@ -157,9 +156,11 @@ networks:
 ## Security
 
 - Port is bound to `127.0.0.1` — not exposed to the network
-- Container runs as non-root with read-only filesystem and dropped capabilities
-- Rate limiting applied to all API routes
+- Runs in a `FROM scratch` image — no shell, no OS userland, minimal attack surface
+- Rate limiting applied to all API and static file routes
 - Upstream error details are logged server-side only — generic messages returned to the browser
+- URL validation at startup — exits immediately on malformed `GLUETUN_CONTROL_URL`
+- Graceful shutdown on `SIGTERM`/`SIGINT` — in-flight requests complete cleanly
 
 ### Reverse-proxy authentication
 
