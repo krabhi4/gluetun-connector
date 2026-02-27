@@ -1,0 +1,38 @@
+[package]
+name = "gluetun-connector"
+version = "1.0.0"
+edition = "2021"
+description = "Web UI and Monitor for Gluetun VPN container management"
+license = "MIT"
+
+[[bin]]
+name = "gluetun-connector"
+path = "src/main.rs"
+
+[dependencies]
+axum            = { version = "0.8", features = ["macros"] }
+tokio           = { version = "1", features = ["full"] }
+tokio-util      = { version = "0.7", features = ["rt"] }
+tower           = "0.5"
+tower-http      = { version = "0.6", features = ["fs", "set-header"] }
+governor        = "0.7"
+
+reqwest         = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+bollard         = { version = "0.18", default-features = false, features = ["http", "pipe"] }
+futures-util    = "0.3"
+
+serde           = { version = "1", features = ["derive"] }
+serde_json      = "1"
+url             = "2"
+base64          = "0.22"
+tracing         = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+anyhow             = "1"
+chrono             = { version = "0.4", features = ["serde"] }
+
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1
+strip         = true
+panic         = "abort"
