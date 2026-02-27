@@ -148,6 +148,11 @@ app.get("/api/dns", async (req, res) => {
   }
 });
 
+// Lightweight liveness probe – used by Docker HEALTHCHECK
+app.get("/api/ping", (req, res) => {
+  res.json({ ok: true });
+});
+
 // Aggregate health snapshot
 app.get("/api/health", async (req, res) => {
   const results = await Promise.allSettled([

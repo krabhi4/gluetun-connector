@@ -32,7 +32,7 @@ services:
     # Depending on setup, read_only might interfere with Docker API or npm modules, leaving default
     
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/ping"]
       interval: 30s
       timeout: 5s
       start_period: 10s
