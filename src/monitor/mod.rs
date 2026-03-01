@@ -5,6 +5,7 @@ pub mod sites;
 use std::sync::Arc;
 
 use bollard::Docker;
+use reqwest::header::HeaderMap;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
@@ -15,6 +16,8 @@ pub fn spawn_monitor(
     config: Arc<Config>,
     state: Arc<RwLock<MonitorState>>,
     docker: Docker,
+    http_client: reqwest::Client,
+    auth_headers: Arc<HeaderMap>,
 ) -> CancellationToken {
     let token = CancellationToken::new();
     let child = token.child_token();
@@ -54,7 +57,7 @@ pub fn spawn_monitor(
                     break;
                 }
                 _ = interval.tick() => {
-                    checker::perform_checks(&config, &state, &docker).await;
+                    checker::perform_checks(&config, &state, &docker, &http_client, &auth_headers).await;
                 }
             }
         }

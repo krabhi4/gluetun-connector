@@ -2,6 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use bollard::Docker;
 use futures_util::future::join_all;
+use reqwest::header::HeaderMap;
+use serde_json::Value;
 use tokio::sync::RwLock;
 
 use crate::{config::Config, state::MonitorState};
@@ -11,7 +13,47 @@ use super::{
     sites::load_sites,
 };
 
-pub async fn perform_checks(config: &Config, state: &Arc<RwLock<MonitorState>>, docker: &Docker) {
+/// Check if the VPN tunnel is actually established by querying gluetun's public IP endpoint.
+/// Returns true only when gluetun responds with a non-empty IP address, confirming the tunnel is up.
+async fn is_tunnel_up(config: &Config, http_client: &reqwest::Client, auth_headers: &HeaderMap) -> bool {
+    let url = match config.gluetun_url.join("/v1/publicip/ip") {
+        Ok(u) => u,
+        Err(_) => return false,
+    };
+    let mut req = http_client.get(url);
+    for (k, v) in auth_headers.iter() {
+        req = req.header(k, v);
+    }
+    match req.send().await {
+        Ok(res) if res.status().is_success() => {
+            let body = res.json::<Value>().await.unwrap_or_default();
+            let ip = body.get("public_ip")
+                .or_else(|| body.get("ip"))
+                .or_else(|| body.get("IP"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            !ip.is_empty()
+        }
+        _ => false,
+    }
+}
+
+pub async fn perform_checks(
+    config: &Config,
+    state: &Arc<RwLock<MonitorState>>,
+    docker: &Docker,
+    http_client: &reqwest::Client,
+    auth_headers: &HeaderMap,
+) {
+    // Pre-flight: only run connectivity tests when the VPN tunnel is confirmed up.
+    // If gluetun is still connecting (no public IP yet), skip — don't count as failure.
+    // This prevents the monitor from restarting gluetun during its own connection phase,
+    // which would cause an infinite restart loop.
+    if !is_tunnel_up(config, http_client, auth_headers).await {
+        tracing::info!("[MONITOR] VPN tunnel not yet established — skipping connectivity checks this interval");
+        return;
+    }
+
     let container_id = match find_container(docker, &config.gluetun_container).await {
         Some(id) => id,
         None => {
@@ -76,15 +118,21 @@ async fn handle_failure(config: &Config, state: &Arc<RwLock<MonitorState>>, dock
     tracing::warn!("[MONITOR] Health check failed, initiating recovery...");
     let success =
         restart_gluetun(docker, &config.gluetun_container, config.healthy_wait_timeout).await;
+
+    // Always reset failure counters after a recovery attempt — success or failure.
+    // Without this, counters stay at/above the threshold and trigger recovery on every
+    // subsequent check indefinitely until gluetun eventually comes back.
+    state.write().await.site_failures = HashMap::new();
+
     if success {
         tracing::info!("[MONITOR] Restarting dependent containers...");
         let dependents =
             resolve_dependents(docker, &config.gluetun_container, &config.dependent_containers)
                 .await;
         restart_containers(docker, &dependents).await;
-        state.write().await.site_failures = HashMap::new();
         tracing::info!("[MONITOR] Recovery complete");
     } else {
-        tracing::error!("[MONITOR] Recovery failed — manual intervention may be required");
+        tracing::error!("[MONITOR] Recovery failed — will retry after {} consecutive failures",
+            config.fail_threshold);
     }
 }

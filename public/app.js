@@ -4,6 +4,7 @@ const MAX_HISTORY = 30;
 const SESSION_KEY = "gluetun_history";
 const VALID_STATES = new Set([
   "connected",
+  "connecting",
   "paused",
   "disconnected",
   "unknown",
@@ -99,6 +100,15 @@ function renderVpnStatus(vpnStatus, vpnSettings, publicIp) {
   const ip = publicIp?.ok ? publicIp.data : null;
   const running = d?.status === "running";
   const stopped = d?.status === "stopped";
+  // A tunnel is only confirmed up if gluetun is running AND can resolve a public IP.
+  // "running" alone only means the VPN process is in the desired state, not that
+  // the tunnel is established (e.g. gluetun may still be connecting or failing).
+  const resolvedIp = publicIp?.ok === true
+    ? (publicIp.data?.public_ip ?? publicIp.data?.ip ?? publicIp.data?.IP ?? null)
+    : null;
+  // Tunnel is only confirmed up when gluetun is running AND returns a non-empty public IP.
+  // The API can return HTTP 200 with no IP while the tunnel is still establishing.
+  const tunnelUp = running && !!resolvedIp;
 
   setText("vpn-status", d?.status ?? "–");
   // provider from settings
@@ -116,10 +126,12 @@ function renderVpnStatus(vpnStatus, vpnSettings, publicIp) {
     "–";
   setText("vpn-server", serverName);
 
-  // 'stopped' is intentional – warn; anything else non-running is an error
-  setBadge("badge-vpn", running ? "ok" : stopped ? "warn" : "error");
+  // Only show OK when tunnel is confirmed up (running + public IP resolves).
+  // 'running' alone means gluetun is trying to connect – show warn + "connecting".
+  // 'stopped' is intentional – warn; anything else is an error.
+  setBadge("badge-vpn", tunnelUp ? "ok" : running ? "warn" : stopped ? "warn" : "error");
   return {
-    state: running ? "connected" : stopped ? "paused" : "disconnected",
+    state: tunnelUp ? "connected" : running ? "connecting" : stopped ? "paused" : "disconnected",
     running,
   };
 }
@@ -140,8 +152,7 @@ function renderPublicIp(publicIp) {
   setText("ip-region", d?.region ?? "–");
   setText("ip-city", d?.city ?? "–");
   setText("ip-org", d?.org ?? d?.organization ?? "–");
-  // IP is always fetched via gluetun's own API, so it's always gluetun's exit IP
-  setBadge("badge-ip", "ok");
+  setBadge("badge-ip", d?.public_ip ?? d?.ip ?? d?.IP ? "ok" : "warn");
 }
 
 function renderPortForwarded(portForwarded) {
@@ -205,6 +216,9 @@ function renderBanner(state, publicIp) {
       ? (publicIp.data?.public_ip ?? publicIp.data?.ip ?? "")
       : "";
     setText("banner-sub", ip ? `Public IP: ${ip}` : "Tunnel is up");
+  } else if (state === "connecting") {
+    setText("banner-title", "VPN Connecting");
+    setText("banner-sub", "Gluetun is running – waiting for tunnel to establish");
   } else if (state === "paused") {
     setText("banner-title", "VPN Paused");
     const ip = publicIp.ok

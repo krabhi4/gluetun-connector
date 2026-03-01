@@ -64,6 +64,8 @@ async fn main() -> anyhow::Result<()> {
         Arc::clone(&config),
         Arc::clone(&monitor_state),
         state.docker.clone(),
+        state.http_client.clone(),
+        Arc::clone(&state.auth_headers),
     );
 
     let app = routes::build_router(state);

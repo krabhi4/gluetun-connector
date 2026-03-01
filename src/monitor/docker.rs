@@ -198,7 +198,12 @@ pub async fn restart_gluetun(docker: &Docker, container_name: &str, healthy_wait
 
 /// Discover containers that use Gluetun as their network (`network_mode: container:<id|name>`).
 pub async fn discover_dependents(docker: &Docker, gluetun_name: &str) -> Vec<String> {
-    let all = match docker.list_containers::<String>(None).await {
+    // Use all:true to include stopped containers — dependents may have stopped because
+    // gluetun went down, and we need to restart them even if they're not running.
+    let all = match docker.list_containers::<String>(Some(bollard::container::ListContainersOptions {
+        all: true,
+        ..Default::default()
+    })).await {
         Ok(c) => c,
         Err(e) => {
             tracing::error!("[MONITOR] Failed to list containers: {e}");

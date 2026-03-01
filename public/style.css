@@ -107,12 +107,14 @@ main {
   transition: border-color 0.3s, background 0.3s;
 }
 .status-banner.connected   { border-color: var(--green);  background: rgba(74,222,128,0.07); }
+.status-banner.connecting  { border-color: var(--blue);   background: rgba(96,165,250,0.07); }
 .status-banner.paused      { border-color: var(--yellow); background: rgba(250,204,21,0.07); }
 .status-banner.disconnected{ border-color: var(--red);    background: rgba(248,113,113,0.07); }
 .status-banner.unknown     { border-color: var(--muted);  background: rgba(100,116,139,0.07); }
 
 .banner-icon { font-size: 1.6rem; line-height: 1; transition: color 0.3s; }
 .status-banner.connected    .banner-icon { color: var(--green); }
+.status-banner.connecting   .banner-icon { color: var(--blue); }
 .status-banner.paused       .banner-icon { color: var(--yellow); }
 .status-banner.disconnected .banner-icon { color: var(--red); }
 .status-banner.unknown      .banner-icon { color: var(--muted); }
@@ -204,6 +206,7 @@ main {
   transition: background 0.3s;
 }
 .history-tick.connected    { background: var(--green);  border-color: var(--green); }
+.history-tick.connecting   { background: var(--blue);   border-color: var(--blue); }
 .history-tick.paused       { background: var(--yellow); border-color: var(--yellow); }
 .history-tick.disconnected { background: var(--red);    border-color: var(--red); }
 .history-tick.unknown      { background: var(--muted);  border-color: var(--muted); }
@@ -211,6 +214,7 @@ main {
 .history-legend { display: flex; gap: 0.4rem; align-items: center; font-size: 0.8rem; color: var(--muted); }
 .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .dot.connected    { background: var(--green); }
+.dot.connecting   { background: var(--blue); }
 .dot.paused       { background: var(--yellow); }
 .dot.disconnected { background: var(--red); }
 .dot.unknown      { background: var(--muted); }
