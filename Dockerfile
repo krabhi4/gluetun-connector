@@ -21,6 +21,10 @@ RUN touch src/main.rs && \
 # ---- Final stage: minimal scratch image ----
 FROM scratch
 
+LABEL org.opencontainers.image.source="https://github.com/krabhi4/gluetun-connector"
+LABEL org.opencontainers.image.description="Web UI and Monitor for Gluetun VPN container management"
+LABEL org.opencontainers.image.licenses="MIT"
+
 COPY --from=builder /binary /usr/local/bin/gluetun-connector
 COPY public/ /app/public/
 
