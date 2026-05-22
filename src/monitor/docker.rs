@@ -267,3 +267,87 @@ pub async fn resolve_dependents(
         DependentContainers::Explicit(list) => list.clone(),
     }
 }
+
+/// Check if any dependent container is running but out of sync with gluetun's network namespace (StartedAt mismatch).
+/// If so, restart them.
+pub async fn check_and_heal_namespaces(
+    docker: &Docker,
+    gluetun_name: &str,
+    dep_config: &DependentContainers,
+) -> anyhow::Result<()> {
+    // 1. Inspect gluetun to get its started_at time.
+    let gluetun_info = match docker.inspect_container(gluetun_name, None).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::debug!("[MONITOR] Could not inspect gluetun container {gluetun_name}: {e}");
+            return Ok(());
+        }
+    };
+
+    let gluetun_state = match gluetun_info.state {
+        Some(s) => s,
+        None => return Ok(()),
+    };
+
+    let gluetun_running = gluetun_state.running.unwrap_or(false);
+    if !gluetun_running {
+        tracing::debug!("[MONITOR] Gluetun is not running, skipping namespace healing");
+        return Ok(());
+    }
+
+    let gluetun_started_str = match gluetun_state.started_at {
+        Some(s) => s,
+        None => return Ok(()),
+    };
+
+    let gluetun_started = match chrono::DateTime::parse_from_rfc3339(&gluetun_started_str) {
+        Ok(dt) => dt,
+        Err(e) => {
+            tracing::error!("[MONITOR] Failed to parse gluetun started_at timestamp '{}': {e}", gluetun_started_str);
+            return Ok(());
+        }
+    };
+
+    // 2. Get list of dependents
+    let dependents = resolve_dependents(docker, gluetun_name, dep_config).await;
+    if dependents.is_empty() {
+        return Ok(());
+    }
+
+    let mut out_of_sync = Vec::new();
+
+    // 3. For each dependent, inspect and compare StartedAt
+    for dep in dependents {
+        if let Ok(info) = docker.inspect_container(&dep, None).await {
+            if let Some(state) = info.state {
+                let running = state.running.unwrap_or(false);
+                if running {
+                    if let Some(started_str) = state.started_at {
+                        if let Ok(started_dt) = chrono::DateTime::parse_from_rfc3339(&started_str) {
+                            if started_dt < gluetun_started {
+                                tracing::warn!(
+                                    "[MONITOR] Dependent container {} is out of sync (started {} < gluetun {})",
+                                    dep,
+                                    started_str,
+                                    gluetun_started_str
+                                );
+                                out_of_sync.push(dep);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Restart out-of-sync dependents
+    if !out_of_sync.is_empty() {
+        tracing::warn!(
+            "[MONITOR] Found {} out-of-sync dependent containers. Restarting them...",
+            out_of_sync.len()
+        );
+        restart_containers(docker, &out_of_sync).await;
+    }
+
+    Ok(())
+}

@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use crate::{config::Config, state::MonitorState};
 
 use super::{
-    docker::{find_container, resolve_dependents, restart_containers, restart_gluetun, test_site},
+    docker::{check_and_heal_namespaces, find_container, resolve_dependents, restart_containers, restart_gluetun, test_site},
     sites::load_sites,
 };
 
@@ -45,6 +45,11 @@ pub async fn perform_checks(
     http_client: &reqwest::Client,
     auth_headers: &HeaderMap,
 ) {
+    // Check and heal namespaces first, so we don't run tests on dead namespaces.
+    if let Err(e) = check_and_heal_namespaces(docker, &config.gluetun_container, &config.dependent_containers).await {
+        tracing::error!("[MONITOR] Failed to check/heal namespaces: {e}");
+    }
+
     // Pre-flight: only run connectivity tests when the VPN tunnel is confirmed up.
     // If gluetun is still connecting (no public IP yet), skip — don't count as failure.
     // This prevents the monitor from restarting gluetun during its own connection phase,
@@ -124,15 +129,18 @@ async fn handle_failure(config: &Config, state: &Arc<RwLock<MonitorState>>, dock
     // subsequent check indefinitely until gluetun eventually comes back.
     state.write().await.site_failures = HashMap::new();
 
+    // Even if gluetun didn't become healthy within the timeout, it was still restarted,
+    // which means the dependents are now using a dead network namespace.
+    // We MUST restart the dependents so they connect to the new namespace.
+    tracing::info!("[MONITOR] Restarting dependent containers to sync network namespaces...");
+    let dependents =
+        resolve_dependents(docker, &config.gluetun_container, &config.dependent_containers)
+            .await;
+    restart_containers(docker, &dependents).await;
+
     if success {
-        tracing::info!("[MONITOR] Restarting dependent containers...");
-        let dependents =
-            resolve_dependents(docker, &config.gluetun_container, &config.dependent_containers)
-                .await;
-        restart_containers(docker, &dependents).await;
         tracing::info!("[MONITOR] Recovery complete");
     } else {
-        tracing::error!("[MONITOR] Recovery failed — will retry after {} consecutive failures",
-            config.fail_threshold);
+        tracing::warn!("[MONITOR] Recovery partially complete (gluetun restarted but not yet healthy)");
     }
 }
