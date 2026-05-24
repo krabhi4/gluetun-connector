@@ -3,8 +3,10 @@ pub mod docker;
 pub mod sites;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use bollard::Docker;
+use futures_util::StreamExt;
 use reqwest::header::HeaderMap;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
@@ -34,6 +36,92 @@ pub fn spawn_monitor(
                     "[MONITOR] Initial dependent containers (auto-discovery): {}",
                     if deps.is_empty() { "(none found)".to_string() } else { deps.join(", ") }
                 );
+            }
+        });
+    }
+
+    // Event listener task for immediate restarts on gluetun health changes
+    {
+        let config_ev = Arc::clone(&config);
+        let docker_ev = docker.clone();
+        let child_ev = child.clone();
+        tokio::spawn(async move {
+            tracing::info!(
+                "[MONITOR] Starting Docker events listener for {}",
+                config_ev.gluetun_container
+            );
+
+            use bollard::system::EventsOptions;
+            use std::collections::HashMap;
+
+            let event_options = EventsOptions::<String> {
+                since: None,
+                until: None,
+                filters: {
+                    let mut f = HashMap::new();
+                    f.insert("container".to_string(), vec![config_ev.gluetun_container.clone()]);
+                    f.insert("event".to_string(), vec!["health_status".to_string()]);
+                    f
+                }
+            };
+
+            let mut events = docker_ev.events(Some(event_options));
+
+            loop {
+                tokio::select! {
+                    _ = child_ev.cancelled() => {
+                        tracing::info!("[MONITOR] Stopped events listener");
+                        break;
+                    }
+                    res = events.next() => {
+                        match res {
+                            Some(Ok(event)) => {
+                                if let Some(action) = event.action {
+                                    if action == "health_status: healthy" {
+                                        tracing::warn!("[MONITOR] Gluetun health status became healthy. Running immediate namespace heal...");
+                                        // Wait a brief moment for Docker networks to fully settle
+                                        tokio::time::sleep(Duration::from_secs(2)).await;
+                                        if let Err(e) = docker::check_and_heal_namespaces(
+                                            &docker_ev,
+                                            &config_ev.gluetun_container,
+                                            &config_ev.dependent_containers
+                                        ).await {
+                                            tracing::error!("[MONITOR] Event-triggered namespace heal failed: {e}");
+                                        }
+                                    }
+                                }
+                            }
+                            Some(Err(e)) => {
+                                tracing::error!("[MONITOR] Docker events stream error: {e}");
+                                tokio::time::sleep(Duration::from_secs(5)).await;
+                                events = docker_ev.events(Some(EventsOptions::<String> {
+                                    since: None,
+                                    until: None,
+                                    filters: {
+                                        let mut f = HashMap::new();
+                                        f.insert("container".to_string(), vec![config_ev.gluetun_container.clone()]);
+                                        f.insert("event".to_string(), vec!["health_status".to_string()]);
+                                        f
+                                    }
+                                }));
+                            }
+                            None => {
+                                tracing::warn!("[MONITOR] Docker events stream ended unexpectedly. Reconnecting...");
+                                tokio::time::sleep(Duration::from_secs(5)).await;
+                                events = docker_ev.events(Some(EventsOptions::<String> {
+                                    since: None,
+                                    until: None,
+                                    filters: {
+                                        let mut f = HashMap::new();
+                                        f.insert("container".to_string(), vec![config_ev.gluetun_container.clone()]);
+                                        f.insert("event".to_string(), vec!["health_status".to_string()]);
+                                        f
+                                    }
+                                }));
+                            }
+                        }
+                    }
+                }
             }
         });
     }
