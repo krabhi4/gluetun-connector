@@ -1,6 +1,6 @@
 # ---- Build stage: compile musl static binary ----
 # Alpine is musl-based, so a native release build produces a static musl binary.
-FROM rust:1.85-alpine AS builder
+FROM rust:1.99-alpine AS builder
 
 RUN apk add --no-cache musl-dev
 
