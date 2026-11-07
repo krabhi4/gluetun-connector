@@ -51,18 +51,18 @@ pub fn spawn_monitor(
                 config_ev.gluetun_container
             );
 
-            use bollard::system::EventsOptions;
+            use bollard::query_parameters::EventsOptions;
             use std::collections::HashMap;
 
-            let event_options = EventsOptions::<String> {
+            let event_options = EventsOptions {
                 since: None,
                 until: None,
-                filters: {
+                filters: Some({
                     let mut f = HashMap::new();
                     f.insert("container".to_string(), vec![config_ev.gluetun_container.clone()]);
                     f.insert("event".to_string(), vec!["health_status".to_string()]);
                     f
-                }
+                })
             };
 
             let mut events = docker_ev.events(Some(event_options));
@@ -94,29 +94,29 @@ pub fn spawn_monitor(
                             Some(Err(e)) => {
                                 tracing::error!("[MONITOR] Docker events stream error: {e}");
                                 tokio::time::sleep(Duration::from_secs(5)).await;
-                                events = docker_ev.events(Some(EventsOptions::<String> {
+                                events = docker_ev.events(Some(EventsOptions {
                                     since: None,
                                     until: None,
-                                    filters: {
+                                    filters: Some({
                                         let mut f = HashMap::new();
                                         f.insert("container".to_string(), vec![config_ev.gluetun_container.clone()]);
                                         f.insert("event".to_string(), vec!["health_status".to_string()]);
                                         f
-                                    }
+                                    })
                                 }));
                             }
                             None => {
                                 tracing::warn!("[MONITOR] Docker events stream ended unexpectedly. Reconnecting...");
                                 tokio::time::sleep(Duration::from_secs(5)).await;
-                                events = docker_ev.events(Some(EventsOptions::<String> {
+                                events = docker_ev.events(Some(EventsOptions {
                                     since: None,
                                     until: None,
-                                    filters: {
+                                    filters: Some({
                                         let mut f = HashMap::new();
                                         f.insert("container".to_string(), vec![config_ev.gluetun_container.clone()]);
                                         f.insert("event".to_string(), vec!["health_status".to_string()]);
                                         f
-                                    }
+                                    })
                                 }));
                             }
                         }

@@ -119,7 +119,7 @@ pub async fn test_site(docker: &Docker, container_id: &str, site: &str, timeout_
 /// Get the container ID for the Gluetun container by name.
 pub async fn find_container(docker: &Docker, name: &str) -> Option<String> {
     docker
-        .list_containers::<String>(Some(bollard::container::ListContainersOptions {
+        .list_containers(Some(bollard::query_parameters::ListContainersOptions {
             all: true,
             ..Default::default()
         }))
@@ -200,7 +200,7 @@ pub async fn restart_gluetun(docker: &Docker, container_name: &str, healthy_wait
 pub async fn discover_dependents(docker: &Docker, gluetun_name: &str) -> Vec<String> {
     // Use all:true to include stopped containers — dependents may have stopped because
     // gluetun went down, and we need to restart them even if they're not running.
-    let all = match docker.list_containers::<String>(Some(bollard::container::ListContainersOptions {
+    let all = match docker.list_containers(Some(bollard::query_parameters::ListContainersOptions {
         all: true,
         ..Default::default()
     })).await {
