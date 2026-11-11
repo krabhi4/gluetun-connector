@@ -26,6 +26,7 @@ LABEL org.opencontainers.image.description="Web UI and Monitor for Gluetun VPN c
 LABEL org.opencontainers.image.licenses="MIT"
 
 COPY --from=builder /binary /usr/local/bin/gluetun-connector
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY public/ /app/public/
 
 WORKDIR /app
