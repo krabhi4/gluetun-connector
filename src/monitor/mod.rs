@@ -29,12 +29,18 @@ pub fn spawn_monitor(
         let config2 = Arc::clone(&config);
         let docker2 = docker.clone();
         tokio::spawn(async move {
-            if matches!(config2.dependent_containers, crate::config::DependentContainers::Auto) {
-                let deps =
-                    docker::discover_dependents(&docker2, &config2.gluetun_container).await;
+            if matches!(
+                config2.dependent_containers,
+                crate::config::DependentContainers::Auto
+            ) {
+                let deps = docker::discover_dependents(&docker2, &config2.gluetun_container).await;
                 tracing::info!(
                     "[MONITOR] Initial dependent containers (auto-discovery): {}",
-                    if deps.is_empty() { "(none found)".to_string() } else { deps.join(", ") }
+                    if deps.is_empty() {
+                        "(none found)".to_string()
+                    } else {
+                        deps.join(", ")
+                    }
                 );
             }
         });
@@ -59,10 +65,13 @@ pub fn spawn_monitor(
                 until: None,
                 filters: Some({
                     let mut f = HashMap::new();
-                    f.insert("container".to_string(), vec![config_ev.gluetun_container.clone()]);
+                    f.insert(
+                        "container".to_string(),
+                        vec![config_ev.gluetun_container.clone()],
+                    );
                     f.insert("event".to_string(), vec!["health_status".to_string()]);
                     f
-                })
+                }),
             };
 
             let mut events = docker_ev.events(Some(event_options));
@@ -76,8 +85,15 @@ pub fn spawn_monitor(
                     res = events.next() => {
                         match res {
                             Some(Ok(event)) => {
+                                let actor_name = event
+                                    .actor
+                                    .as_ref()
+                                    .and_then(|a| a.attributes.as_ref())
+                                    .and_then(|attrs| attrs.get("name"));
                                 if let Some(action) = event.action {
-                                    if action == "health_status: healthy" {
+                                    if action == "health_status: healthy"
+                                        && actor_name == Some(&config_ev.gluetun_container)
+                                    {
                                         tracing::warn!("[MONITOR] Gluetun health status became healthy. Running immediate namespace heal...");
                                         // Wait a brief moment for Docker networks to fully settle
                                         tokio::time::sleep(Duration::from_secs(2)).await;
