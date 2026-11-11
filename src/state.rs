@@ -1,5 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
 use reqwest::header::HeaderMap;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::config::Config;

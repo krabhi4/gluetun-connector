@@ -42,9 +42,7 @@ impl Config {
         let gluetun_api_key = std::env::var("GLUETUN_API_KEY")
             .ok()
             .filter(|s| !s.is_empty());
-        let gluetun_user = std::env::var("GLUETUN_USER")
-            .ok()
-            .filter(|s| !s.is_empty());
+        let gluetun_user = std::env::var("GLUETUN_USER").ok().filter(|s| !s.is_empty());
         let gluetun_password = std::env::var("GLUETUN_PASSWORD")
             .ok()
             .filter(|s| !s.is_empty());
@@ -65,13 +63,16 @@ impl Config {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(2);
-        let gluetun_container = std::env::var("GLUETUN_CONTAINER")
-            .unwrap_or_else(|_| "gluetun".to_string());
+        let gluetun_container =
+            std::env::var("GLUETUN_CONTAINER").unwrap_or_else(|_| "gluetun".to_string());
         let dependent_containers =
             match std::env::var("DEPENDENT_CONTAINERS").unwrap_or_else(|_| "auto".to_string()) {
                 s if s.eq_ignore_ascii_case("auto") => DependentContainers::Auto,
                 s => DependentContainers::Explicit(
-                    s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect(),
+                    s.split(',')
+                        .map(|x| x.trim().to_string())
+                        .filter(|x| !x.is_empty())
+                        .collect(),
                 ),
             };
         let healthy_wait_timeout = Duration::from_secs(

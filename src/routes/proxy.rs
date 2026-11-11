@@ -35,11 +35,7 @@ async fn proxy_get(state: &AppState, path: &str) -> impl IntoResponse {
 }
 
 pub async fn gluetun_fetch(state: &AppState, path: &str) -> Result<Value, ()> {
-    let url = state
-        .config
-        .gluetun_url
-        .join(path)
-        .map_err(|_| ())?;
+    let url = state.config.gluetun_url.join(path).map_err(|_| ())?;
 
     let mut req = state.http_client.get(url);
     for (k, v) in state.auth_headers.iter() {
@@ -53,7 +49,10 @@ pub async fn gluetun_fetch(state: &AppState, path: &str) -> Result<Value, ()> {
     if !res.status().is_success() {
         let status = res.status();
         let body = res.text().await.unwrap_or_default();
-        tracing::error!("[upstream] Gluetun returned {status}: {}", body.chars().take(200).collect::<String>());
+        tracing::error!(
+            "[upstream] Gluetun returned {status}: {}",
+            body.chars().take(200).collect::<String>()
+        );
         return Err(());
     }
 

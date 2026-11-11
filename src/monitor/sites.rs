@@ -9,7 +9,10 @@ pub fn load_sites(path: &Path) -> Vec<String> {
             .filter(|l| !l.is_empty() && !l.starts_with('#'))
             .collect(),
         Err(e) => {
-            tracing::error!("[MONITOR] Config file not found or unreadable ({}): {e}", path.display());
+            tracing::error!(
+                "[MONITOR] Config file not found or unreadable ({}): {e}",
+                path.display()
+            );
             vec![]
         }
     }
