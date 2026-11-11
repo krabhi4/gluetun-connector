@@ -3,7 +3,12 @@ pub mod monitor;
 pub mod proxy;
 pub mod vpn;
 
-use std::{net::{IpAddr, SocketAddr}, num::NonZeroU32, sync::Arc, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    num::NonZeroU32,
+    sync::Arc,
+    time::Duration,
+};
 
 use axum::{
     extract::{ConnectInfo, Request},

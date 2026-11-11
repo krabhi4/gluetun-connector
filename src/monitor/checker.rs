@@ -9,13 +9,20 @@ use tokio::sync::RwLock;
 use crate::{config::Config, state::MonitorState};
 
 use super::{
-    docker::{check_and_heal_namespaces, find_container, resolve_dependents, restart_containers, restart_gluetun, test_site},
+    docker::{
+        check_and_heal_namespaces, find_container, resolve_dependents, restart_containers,
+        restart_gluetun, test_site,
+    },
     sites::load_sites,
 };
 
 /// Check if the VPN tunnel is actually established by querying gluetun's public IP endpoint.
 /// Returns true only when gluetun responds with a non-empty IP address, confirming the tunnel is up.
-async fn is_tunnel_up(config: &Config, http_client: &reqwest::Client, auth_headers: &HeaderMap) -> bool {
+async fn is_tunnel_up(
+    config: &Config,
+    http_client: &reqwest::Client,
+    auth_headers: &HeaderMap,
+) -> bool {
     let url = match config.gluetun_url.join("/v1/publicip/ip") {
         Ok(u) => u,
         Err(_) => return false,
@@ -27,7 +34,8 @@ async fn is_tunnel_up(config: &Config, http_client: &reqwest::Client, auth_heade
     match req.send().await {
         Ok(res) if res.status().is_success() => {
             let body = res.json::<Value>().await.unwrap_or_default();
-            let ip = body.get("public_ip")
+            let ip = body
+                .get("public_ip")
                 .or_else(|| body.get("ip"))
                 .or_else(|| body.get("IP"))
                 .and_then(|v| v.as_str())
@@ -46,7 +54,13 @@ pub async fn perform_checks(
     auth_headers: &HeaderMap,
 ) {
     // Check and heal namespaces first, so we don't run tests on dead namespaces.
-    if let Err(e) = check_and_heal_namespaces(docker, &config.gluetun_container, &config.dependent_containers).await {
+    if let Err(e) = check_and_heal_namespaces(
+        docker,
+        &config.gluetun_container,
+        &config.dependent_containers,
+    )
+    .await
+    {
         tracing::error!("[MONITOR] Failed to check/heal namespaces: {e}");
     }
 
@@ -55,14 +69,19 @@ pub async fn perform_checks(
     // This prevents the monitor from restarting gluetun during its own connection phase,
     // which would cause an infinite restart loop.
     if !is_tunnel_up(config, http_client, auth_headers).await {
-        tracing::info!("[MONITOR] VPN tunnel not yet established — skipping connectivity checks this interval");
+        tracing::info!(
+            "[MONITOR] VPN tunnel not yet established — skipping connectivity checks this interval"
+        );
         return;
     }
 
     let container_id = match find_container(docker, &config.gluetun_container).await {
         Some(id) => id,
         None => {
-            tracing::error!("[MONITOR] Container {} not found!", config.gluetun_container);
+            tracing::error!(
+                "[MONITOR] Container {} not found!",
+                config.gluetun_container
+            );
             return;
         }
     };
@@ -73,9 +92,12 @@ pub async fn perform_checks(
     }
 
     let timeout_secs = config.request_timeout.as_secs();
-    let results =
-        join_all(sites.iter().map(|site| test_site(docker, &container_id, site, timeout_secs)))
-            .await;
+    let results = join_all(
+        sites
+            .iter()
+            .map(|site| test_site(docker, &container_id, site, timeout_secs)),
+    )
+    .await;
 
     let mut any_exceeded = false;
     {
@@ -121,8 +143,12 @@ pub async fn perform_checks(
 
 async fn handle_failure(config: &Config, state: &Arc<RwLock<MonitorState>>, docker: &Docker) {
     tracing::warn!("[MONITOR] Health check failed, initiating recovery...");
-    let success =
-        restart_gluetun(docker, &config.gluetun_container, config.healthy_wait_timeout).await;
+    let success = restart_gluetun(
+        docker,
+        &config.gluetun_container,
+        config.healthy_wait_timeout,
+    )
+    .await;
 
     // Always reset failure counters after a recovery attempt — success or failure.
     // Without this, counters stay at/above the threshold and trigger recovery on every
@@ -133,14 +159,19 @@ async fn handle_failure(config: &Config, state: &Arc<RwLock<MonitorState>>, dock
     // which means the dependents are now using a dead network namespace.
     // We MUST restart the dependents so they connect to the new namespace.
     tracing::info!("[MONITOR] Restarting dependent containers to sync network namespaces...");
-    let dependents =
-        resolve_dependents(docker, &config.gluetun_container, &config.dependent_containers)
-            .await;
+    let dependents = resolve_dependents(
+        docker,
+        &config.gluetun_container,
+        &config.dependent_containers,
+    )
+    .await;
     restart_containers(docker, &dependents).await;
 
     if success {
         tracing::info!("[MONITOR] Recovery complete");
     } else {
-        tracing::warn!("[MONITOR] Recovery partially complete (gluetun restarted but not yet healthy)");
+        tracing::warn!(
+            "[MONITOR] Recovery partially complete (gluetun restarted but not yet healthy)"
+        );
     }
 }

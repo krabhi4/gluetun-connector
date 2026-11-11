@@ -25,15 +25,28 @@ pub enum SiteStatus {
 
 impl SiteResult {
     fn pass(site: &str, reason: Option<String>) -> Self {
-        Self { site: site.to_string(), status: SiteStatus::Pass, reason }
+        Self {
+            site: site.to_string(),
+            status: SiteStatus::Pass,
+            reason,
+        }
     }
     fn fail(site: &str, reason: impl Into<String>) -> Self {
-        Self { site: site.to_string(), status: SiteStatus::Fail, reason: Some(reason.into()) }
+        Self {
+            site: site.to_string(),
+            status: SiteStatus::Fail,
+            reason: Some(reason.into()),
+        }
     }
 }
 
 /// Run `wget --spider` inside the Gluetun container to test connectivity to `site`.
-pub async fn test_site(docker: &Docker, container_id: &str, site: &str, timeout_secs: u64) -> SiteResult {
+pub async fn test_site(
+    docker: &Docker,
+    container_id: &str,
+    site: &str,
+    timeout_secs: u64,
+) -> SiteResult {
     let start = Instant::now();
 
     // Commands are passed as Vec<String> — exec form, no shell, no injection risk
@@ -96,7 +109,10 @@ pub async fn test_site(docker: &Docker, container_id: &str, site: &str, timeout_
     };
 
     let http_code = output_buf.find("HTTP/").and_then(|pos| {
-        output_buf[pos..].split_whitespace().nth(1).map(|s| s.to_string())
+        output_buf[pos..]
+            .split_whitespace()
+            .nth(1)
+            .map(|s| s.to_string())
     });
 
     let elapsed = start.elapsed();
@@ -127,7 +143,9 @@ pub async fn find_container(docker: &Docker, name: &str) -> Option<String> {
         .ok()?
         .into_iter()
         .find(|c| {
-            c.names.as_ref().map_or(false, |ns| ns.iter().any(|n| n == &format!("/{name}")))
+            c.names
+                .as_ref()
+                .is_some_and(|ns| ns.iter().any(|n| n == &format!("/{name}")))
         })
         .and_then(|c| c.id)
 }
@@ -150,11 +168,7 @@ pub async fn wait_for_healthy(docker: &Docker, container_name: &str, timeout: Du
                     }
                     None => {
                         // No HEALTHCHECK configured — fall back to checking running state
-                        let running = info
-                            .state
-                            .as_ref()
-                            .and_then(|s| s.running)
-                            .unwrap_or(false);
+                        let running = info.state.as_ref().and_then(|s| s.running).unwrap_or(false);
                         if running {
                             tracing::info!(
                                 "[MONITOR] {container_name} has no HEALTHCHECK but is running"
@@ -182,7 +196,11 @@ pub async fn wait_for_healthy(docker: &Docker, container_name: &str, timeout: Du
 }
 
 /// Restart the Gluetun container and wait for it to become healthy.
-pub async fn restart_gluetun(docker: &Docker, container_name: &str, healthy_wait: Duration) -> bool {
+pub async fn restart_gluetun(
+    docker: &Docker,
+    container_name: &str,
+    healthy_wait: Duration,
+) -> bool {
     tracing::warn!("[MONITOR] Restarting {container_name} to force new endpoint...");
     if let Err(e) = docker.restart_container(container_name, None).await {
         tracing::error!("[MONITOR] Failed to restart {container_name}: {e}");
@@ -200,10 +218,13 @@ pub async fn restart_gluetun(docker: &Docker, container_name: &str, healthy_wait
 pub async fn discover_dependents(docker: &Docker, gluetun_name: &str) -> Vec<String> {
     // Use all:true to include stopped containers — dependents may have stopped because
     // gluetun went down, and we need to restart them even if they're not running.
-    let all = match docker.list_containers(Some(bollard::query_parameters::ListContainersOptions {
-        all: true,
-        ..Default::default()
-    })).await {
+    let all = match docker
+        .list_containers(Some(bollard::query_parameters::ListContainersOptions {
+            all: true,
+            ..Default::default()
+        }))
+        .await
+    {
         Ok(c) => c,
         Err(e) => {
             tracing::error!("[MONITOR] Failed to list containers: {e}");
@@ -212,29 +233,47 @@ pub async fn discover_dependents(docker: &Docker, gluetun_name: &str) -> Vec<Str
     };
 
     // Extract Gluetun ID from already-fetched list (avoids a second list_containers call)
-    let gluetun_id = all.iter().find(|c| {
-        c.names.as_ref().map_or(false, |ns| ns.iter().any(|n| n == &format!("/{gluetun_name}")))
-    }).and_then(|c| c.id.clone());
-    let short_id = gluetun_id.as_deref().map(|id| id[..id.len().min(12)].to_string());
+    let gluetun_id = all
+        .iter()
+        .find(|c| {
+            c.names
+                .as_ref()
+                .is_some_and(|ns| ns.iter().any(|n| n == &format!("/{gluetun_name}")))
+        })
+        .and_then(|c| c.id.clone());
+    let short_id = gluetun_id
+        .as_deref()
+        .map(|id| id[..id.len().min(12)].to_string());
 
     let mut dependents = vec![];
     for c in all {
-        let name = c.names.as_ref()
+        let name = c
+            .names
+            .as_ref()
             .and_then(|ns| ns.first())
             .map(|n| n.trim_start_matches('/').to_string())
             .unwrap_or_default();
-        if name == gluetun_name { continue; }
+        if name == gluetun_name {
+            continue;
+        }
 
-        let network_mode = c.host_config
+        let network_mode = c
+            .host_config
             .as_ref()
             .and_then(|h| h.network_mode.as_deref())
             .unwrap_or("");
 
         let is_dep = network_mode == format!("container:{gluetun_name}")
-            || gluetun_id.as_deref().map_or(false, |id| network_mode == format!("container:{id}"))
-            || short_id.as_deref().map_or(false, |sid| network_mode.starts_with(&format!("container:{sid}")));
+            || gluetun_id
+                .as_deref()
+                .is_some_and(|id| network_mode == format!("container:{id}"))
+            || short_id
+                .as_deref()
+                .is_some_and(|sid| network_mode.starts_with(&format!("container:{sid}")));
 
-        if is_dep { dependents.push(name); }
+        if is_dep {
+            dependents.push(name);
+        }
     }
     dependents
 }
@@ -303,7 +342,10 @@ pub async fn check_and_heal_namespaces(
     let gluetun_started = match chrono::DateTime::parse_from_rfc3339(&gluetun_started_str) {
         Ok(dt) => dt,
         Err(e) => {
-            tracing::error!("[MONITOR] Failed to parse gluetun started_at timestamp '{}': {e}", gluetun_started_str);
+            tracing::error!(
+                "[MONITOR] Failed to parse gluetun started_at timestamp '{}': {e}",
+                gluetun_started_str
+            );
             return Ok(());
         }
     };
